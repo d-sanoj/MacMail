@@ -1,0 +1,12 @@
+{
+  "installed": {
+    "client_id": "REPLACE_WITH_GOOGLE_OAUTH_CLIENT_ID",
+    "project_id": "gmailbox",
+    "auth_uri": "https://accounts.google.com/o/oauth2/v2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "client_secret": "REPLACE_WITH_GOOGLE_OAUTH_CLIENT_SECRET",
+    "redirect_uris": [
+      "http://127.0.0.1"
+    ]
+  }
+}

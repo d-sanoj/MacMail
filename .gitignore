@@ -1,0 +1,27 @@
+.build/
+dist/
+.DS_Store
+DerivedData/
+*.xcuserstate
+.codex/
+*.xcuserdatad/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Local OAuth credentials and account data
+Sources/GmailBox/Config/GoogleOAuthClient.json
+GoogleOAuthClient.json
+*credentials*.json
+*client_secret*.json
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+.env
+.env.*
+
+# Local logs and packaged builds
+*.log
+*.app
+*.dmg
+*.zip
