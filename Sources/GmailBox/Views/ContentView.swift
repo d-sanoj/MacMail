@@ -9,7 +9,13 @@ struct ContentView: View {
             Divider()
             HSplitView {
                 SidebarView(store: store)
-                    .frame(minWidth: 220, idealWidth: 260, maxWidth: 320, maxHeight: .infinity)
+                    .frame(
+                        minWidth: store.isSidebarCollapsed ? 60 : 220,
+                        idealWidth: store.isSidebarCollapsed ? 60 : 260,
+                        maxWidth: store.isSidebarCollapsed ? 60 : 320,
+                        maxHeight: .infinity
+                    )
+                    .animation(.default, value: store.isSidebarCollapsed)
 
                 ThreadListView(store: store)
                     .frame(minWidth: 360, idealWidth: 440, maxHeight: .infinity)
@@ -33,6 +39,7 @@ struct ContentView: View {
         .sheet(isPresented: $store.showingSettings) {
             SettingsView(store: store)
         }
+
         .alert("GmailBox", isPresented: Binding(
             get: { store.errorMessage != nil },
             set: { if !$0 { store.errorMessage = nil } }
@@ -46,7 +53,7 @@ struct ContentView: View {
         .task(id: store.selectedAccountId) {
             guard store.selectedAccountId != nil else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 120_000_000_000)
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
                 guard !Task.isCancelled else { return }
                 await store.performBackgroundCheck()
             }

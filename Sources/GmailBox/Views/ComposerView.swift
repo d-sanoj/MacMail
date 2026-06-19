@@ -60,6 +60,54 @@ struct ComposerView: View {
         }
     }
 
+    private var generatedHTML: String? {
+        let hasFormatting = isBold || isItalic || isUnderlined || selectedFont != "Sans Serif" || selectedSize != "Normal" || bodyText.contains("\n")
+        guard hasFormatting else { return nil }
+
+        let fontMap: [String: String] = [
+            "Sans Serif": "sans-serif",
+            "Serif": "serif",
+            "Fixed Width": "monospace"
+        ]
+        let sizeMap: [String: String] = [
+            "Small": "small",
+            "Normal": "medium",
+            "Large": "large",
+            "Huge": "x-large"
+        ]
+
+        var styles: [String] = []
+        if let fontFamily = fontMap[selectedFont] { styles.append("font-family: \(fontFamily)") }
+        if let fontSize = sizeMap[selectedSize] { styles.append("font-size: \(fontSize)") }
+        if isBold { styles.append("font-weight: bold") }
+        if isItalic { styles.append("font-style: italic") }
+        if isUnderlined { styles.append("text-decoration: underline") }
+
+        let styleString = styles.joined(separator: "; ")
+        
+        let htmlContent = bodyText
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\n", with: "<br>")
+
+        // Very basic link support for markdown links [text](url)
+        let linkRegex = try? NSRegularExpression(pattern: "\\[(.*?)\\]\\((.*?)\\)")
+        var processedHtmlContent = htmlContent
+        if let regex = linkRegex {
+            let nsString = processedHtmlContent as NSString
+            let results = regex.matches(in: processedHtmlContent, range: NSRange(location: 0, length: nsString.length))
+            for result in results.reversed() {
+                let text = nsString.substring(with: result.range(at: 1))
+                let url = nsString.substring(with: result.range(at: 2))
+                let linkHtml = "<a href=\"\(url)\">\(text)</a>"
+                processedHtmlContent = (processedHtmlContent as NSString).replacingCharacters(in: result.range, with: linkHtml)
+            }
+        }
+
+        return "<div style=\"\(styleString)\">\(processedHtmlContent)</div>"
+    }
+
     private var titleBar: some View {
         HStack {
             Text("New Message")
@@ -148,7 +196,15 @@ struct ComposerView: View {
     private var actionToolbar: some View {
         HStack(spacing: 10) {
             Button {
-                store.sendPlainTextEmail(to: to, cc: cc, bcc: bcc, subject: subject, body: bodyText)
+                store.sendEmail(
+                    to: to,
+                    cc: cc,
+                    bcc: bcc,
+                    subject: subject,
+                    plainText: bodyText,
+                    htmlBody: generatedHTML,
+                    attachments: attachments.map(\.url)
+                )
             } label: {
                 HStack(spacing: 0) {
                     Text("Send")

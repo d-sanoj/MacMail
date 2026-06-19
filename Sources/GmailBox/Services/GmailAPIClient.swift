@@ -34,6 +34,37 @@ final class GmailAPIClient {
         }
     }
 
+    func createLabel(accessToken: String, name: String) async throws -> GmailLabel {
+        let body = try JSONSerialization.data(withJSONObject: [
+            "name": name,
+            "labelListVisibility": "labelShow",
+            "messageListVisibility": "show"
+        ])
+        let data = try await send(path: "labels", method: "POST", body: body, accessToken: accessToken)
+        
+        struct Label: Decodable {
+            let id: String
+            let name: String
+            let type: String?
+            let messagesTotal: Int?
+            let messagesUnread: Int?
+        }
+        let decoded = try JSONDecoder().decode(Label.self, from: data)
+        return GmailLabel(
+            id: decoded.id,
+            accountId: "",
+            name: decoded.name,
+            type: labelType(id: decoded.id, apiType: decoded.type),
+            colorHex: nil,
+            unreadCount: decoded.messagesUnread ?? 0,
+            totalCount: decoded.messagesTotal ?? 0
+        )
+    }
+
+    func deleteLabel(accessToken: String, labelId: String) async throws {
+        _ = try await send(path: "labels/\(labelId)", method: "DELETE", accessToken: accessToken)
+    }
+
     func threads(accessToken: String, query: String?, labelId: String?, maxResults: Int = 50, includeSpamTrash: Bool = false) async throws -> [GmailThread] {
         let page = try await threadPage(accessToken: accessToken, query: query, labelId: labelId, maxResults: maxResults, pageToken: nil, includeSpamTrash: includeSpamTrash)
         return try await hydrateThreadSummaries(page.threads, accessToken: accessToken)
@@ -230,6 +261,8 @@ final class GmailAPIClient {
             let dataURL = "data:\(inlineImage.mimeType);base64,\(imageData.base64EncodedString())"
             for cid in inlineImage.cidVariants {
                 html = html.replacingOccurrences(of: "cid:\(cid)", with: dataURL)
+                html = html.replacingOccurrences(of: "src=\"\(cid)\"", with: "src=\"\(dataURL)\"")
+                html = html.replacingOccurrences(of: "src='\(cid)'", with: "src='\(dataURL)'")
             }
         }
 
@@ -327,13 +360,20 @@ private struct GmailMessagePart: Decodable {
     var inlineImages: [InlineImageReference] {
         flattenedParts.compactMap { part in
             guard let mimeType = part.mimeType,
-                  mimeType.hasPrefix("image/"),
-                  let contentID = part.header("Content-ID") ?? part.header("Content-Id") else {
+                  mimeType.hasPrefix("image/") else {
+                return nil
+            }
+            
+            let contentID = part.header("Content-ID") ?? part.header("Content-Id") ?? part.header("X-Attachment-Id")
+            let cid: String
+            if let contentID {
+                cid = contentID.trimmingCharacters(in: CharacterSet(charactersIn: "<> "))
+            } else if let filename = part.filename, !filename.isEmpty {
+                cid = filename
+            } else {
                 return nil
             }
 
-            let cid = contentID
-                .trimmingCharacters(in: CharacterSet(charactersIn: "<> "))
             guard !cid.isEmpty else { return nil }
 
             return InlineImageReference(
@@ -382,7 +422,7 @@ private struct GmailMessagePart: Decodable {
 
         let lowercasedFilename = filename.lowercased()
         let contentDisposition = header("Content-Disposition")?.lowercased() ?? ""
-        let contentID = header("Content-ID") ?? header("Content-Id")
+        let contentID = header("Content-ID") ?? header("Content-Id") ?? header("X-Attachment-Id")
 
         if contentID != nil || contentDisposition.contains("inline") {
             return false
@@ -390,12 +430,12 @@ private struct GmailMessagePart: Decodable {
 
         if (mimeType?.hasPrefix("image/") ?? false) {
             let size = body?.size ?? 0
-            let likelyLogoName = ["logo", "icon", "spacer", "pixel", "tracking", "signature", "facebook", "twitter", "instagram", "linkedin", "youtube"]
+            let likelyLogoName = ["logo", "icon", "spacer", "pixel", "tracking", "signature", "facebook", "twitter", "instagram", "linkedin", "youtube", "image00"]
                 .contains { lowercasedFilename.contains($0) }
-            if size > 0 && size < 12_000 {
+            if size > 0 && size < 40_000 {
                 return false
             }
-            if size < 80_000 && likelyLogoName {
+            if size < 150_000 && likelyLogoName {
                 return false
             }
         }

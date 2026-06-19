@@ -3,11 +3,9 @@ import WebKit
 
 struct HTMLMessageBodyView: View {
     let html: String
-    @State private var contentHeight: CGFloat = 260
 
     var body: some View {
-        HTMLWebView(html: html, contentHeight: $contentHeight)
-            .frame(minHeight: 120, idealHeight: contentHeight, maxHeight: contentHeight)
+        HTMLWebView(html: html)
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .background(Color.white)
     }
@@ -15,7 +13,6 @@ struct HTMLMessageBodyView: View {
 
 private struct HTMLWebView: NSViewRepresentable {
     let html: String
-    @Binding var contentHeight: CGFloat
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
@@ -32,13 +29,11 @@ private struct HTMLWebView: NSViewRepresentable {
         if context.coordinator.lastHTML != wrappedHTML {
             context.coordinator.lastHTML = wrappedHTML
             webView.loadHTMLString(wrappedHTML, baseURL: nil)
-        } else {
-            context.coordinator.updateHeight(for: webView)
         }
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(contentHeight: $contentHeight)
+        Coordinator()
     }
 
     private func htmlDocument(for body: String) -> String {
@@ -74,14 +69,9 @@ private struct HTMLWebView: NSViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         var lastHTML: String?
-        private let contentHeight: Binding<CGFloat>
-
-        init(contentHeight: Binding<CGFloat>) {
-            self.contentHeight = contentHeight
-        }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            updateHeight(for: webView)
+            // No longer forcing height
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -91,16 +81,6 @@ private struct HTMLWebView: NSViewRepresentable {
                 decisionHandler(.cancel)
             } else {
                 decisionHandler(.allow)
-            }
-        }
-
-        func updateHeight(for webView: WKWebView) {
-            webView.evaluateJavaScript("Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);") { [weak self] result, _ in
-                guard let self else { return }
-                let height = (result as? CGFloat) ?? (result as? Double).map { CGFloat($0) } ?? 260
-                DispatchQueue.main.async {
-                    self.contentHeight.wrappedValue = max(120, min(height + 16, 8000))
-                }
             }
         }
     }

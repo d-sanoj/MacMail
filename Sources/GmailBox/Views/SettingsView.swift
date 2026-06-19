@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     @ObservedObject var store: MailStore
     @Environment(\.dismiss) private var dismiss
+    @State private var showingCreateLabel = false
+    @State private var newLabelName = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,6 +26,96 @@ struct SettingsView: View {
             .background(.bar)
 
             Form {
+            Section("General Settings") {
+                Toggle("Show labels on messages", isOn: $store.showLabelsOnMessages)
+            }
+
+            Section("Labels") {
+                Button("Create New Label") {
+                    showingCreateLabel = true
+                }
+            }
+                
+            let displayableSystemLabelIds: [String] = [
+                GmailSystemLabel.inbox, GmailSystemLabel.starred, GmailSystemLabel.important,
+                GmailSystemLabel.sent, GmailSystemLabel.snoozed, GmailSystemLabel.scheduled,
+                GmailSystemLabel.drafts, GmailSystemLabel.allMail, GmailSystemLabel.spam, GmailSystemLabel.trash
+            ]
+            let visibleSystemLabels = store.systemLabels
+                .filter { displayableSystemLabelIds.contains($0.id) }
+                .sorted {
+                    let idx1 = displayableSystemLabelIds.firstIndex(of: $0.id) ?? 0
+                    let idx2 = displayableSystemLabelIds.firstIndex(of: $1.id) ?? 0
+                    return idx1 < idx2
+                }
+            
+            if !visibleSystemLabels.isEmpty {
+                Section("System Labels") {
+                    ForEach(visibleSystemLabels) { label in
+                        Toggle(label.name.capitalized, isOn: Binding(
+                            get: { !store.hiddenLabelIds.contains(label.id) },
+                            set: { isVisible in
+                                var hidden = store.hiddenLabelIds
+                                if isVisible {
+                                    hidden.remove(label.id)
+                                } else {
+                                    hidden.insert(label.id)
+                                }
+                                store.hiddenLabelIds = hidden
+                            }
+                        ))
+                    }
+                }
+            }
+
+            if !store.customLabels.isEmpty {
+                Section("Custom Labels") {
+                    ForEach(store.customLabels) { label in
+                        Toggle(label.name, isOn: Binding(
+                            get: { !store.hiddenLabelIds.contains(label.id) },
+                            set: { isVisible in
+                                var hidden = store.hiddenLabelIds
+                                if isVisible {
+                                    hidden.remove(label.id)
+                                } else {
+                                    hidden.insert(label.id)
+                                }
+                                store.hiddenLabelIds = hidden
+                            }
+                        ))
+                    }
+                }
+            }
+            
+            Section("Reading Pane Toolbar") {
+                Toggle("Show Text on Buttons", isOn: $store.showToolbarText)
+                Divider()
+                Toggle("Archive", isOn: Binding(
+                    get: { !store.hiddenToolbarButtons.contains("archive") },
+                    set: { isVisible in store.toggleToolbarButton("archive", isVisible: isVisible) }
+                ))
+                Toggle("Delete", isOn: Binding(
+                    get: { !store.hiddenToolbarButtons.contains("delete") },
+                    set: { isVisible in store.toggleToolbarButton("delete", isVisible: isVisible) }
+                ))
+                Toggle("Mark Unread", isOn: Binding(
+                    get: { !store.hiddenToolbarButtons.contains("unread") },
+                    set: { isVisible in store.toggleToolbarButton("unread", isVisible: isVisible) }
+                ))
+                Toggle("Report Spam", isOn: Binding(
+                    get: { !store.hiddenToolbarButtons.contains("spam") },
+                    set: { isVisible in store.toggleToolbarButton("spam", isVisible: isVisible) }
+                ))
+                Toggle("Labels", isOn: Binding(
+                    get: { !store.hiddenToolbarButtons.contains("labels") },
+                    set: { isVisible in store.toggleToolbarButton("labels", isVisible: isVisible) }
+                ))
+                Toggle("More Options", isOn: Binding(
+                    get: { !store.hiddenToolbarButtons.contains("more") },
+                    set: { isVisible in store.toggleToolbarButton("more", isVisible: isVisible) }
+                ))
+            }
+
             Section("Google API Setup") {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -115,6 +207,19 @@ struct SettingsView: View {
             .padding()
         }
         .frame(width: 620, height: 560)
+        .alert("New Label", isPresented: $showingCreateLabel) {
+            TextField("Label Name", text: $newLabelName)
+            Button("Create") {
+                let trimmed = newLabelName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    store.createLabel(name: trimmed)
+                }
+                newLabelName = ""
+            }
+            Button("Cancel", role: .cancel) {
+                newLabelName = ""
+            }
+        }
     }
 
     private func importOAuthJSON() {

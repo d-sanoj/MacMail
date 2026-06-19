@@ -62,9 +62,44 @@ extension Date {
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
+        formatter.dateFormat = "MM/dd/yy"
         return formatter
     }()
+}
+
+enum TimeSection: String, CaseIterable, Identifiable {
+    case today = "Today"
+    case yesterday = "Yesterday"
+    case thisWeek = "This week"
+    case lastWeek = "Last week"
+    case thisMonth = "This month"
+    case older = "Older"
+    
+    var id: String { rawValue }
+}
+
+extension Date {
+    var timeSection: TimeSection {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(self) { return .today }
+        if calendar.isDateInYesterday(self) { return .yesterday }
+        
+        let now = Date()
+        if calendar.isDate(self, equalTo: now, toGranularity: .weekOfYear) {
+            return .thisWeek
+        }
+        
+        if let lastWeekDate = calendar.date(byAdding: .weekOfYear, value: -1, to: now),
+           calendar.isDate(self, equalTo: lastWeekDate, toGranularity: .weekOfYear) {
+            return .lastWeek
+        }
+        
+        if calendar.isDate(self, equalTo: now, toGranularity: .month) {
+            return .thisMonth
+        }
+        
+        return .older
+    }
 }
 
 extension Color {

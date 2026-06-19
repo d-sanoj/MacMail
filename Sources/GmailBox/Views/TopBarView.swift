@@ -5,9 +5,20 @@ struct TopBarView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("GmailBox")
-                .font(.headline)
-                .frame(width: 180, alignment: .leading)
+            Button {
+                withAnimation {
+                    store.isSidebarCollapsed.toggle()
+                }
+            } label: {
+                Image(systemName: "sidebar.left")
+                    .imageScale(.large)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Toggle Sidebar")
+
+            Spacer()
+                .frame(width: 140)
 
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")

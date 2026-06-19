@@ -1,4 +1,5 @@
 import AppKit
+import QuickLook
 import SwiftUI
 
 struct ReadingPaneView: View {
@@ -9,16 +10,21 @@ struct ReadingPaneView: View {
             if let thread = store.selectedThread {
                 header(thread)
                 Divider()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        subjectBlock(thread)
-                        ForEach(store.selectedMessages) { message in
-                            MessageCardView(message: message, store: store)
-                        }
+                VStack(alignment: .leading, spacing: 16) {
+                    subjectBlock(thread)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                    
+                    ForEach(store.selectedMessages) { message in
+                        MessageHeaderView(message: message, store: store)
+                            .padding(.horizontal, 20)
+                        
+                        MessageBodyCard(message: message)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 10)
                     }
-                    .padding(20)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ContentUnavailableView(
@@ -32,64 +38,85 @@ struct ReadingPaneView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    @ViewBuilder
+    private func toolbarLabel(_ title: String, icon: String) -> some View {
+        if store.showToolbarText {
+            Label(title, systemImage: icon)
+        } else {
+            Image(systemName: icon)
+        }
+    }
+
     private func header(_ thread: GmailThread) -> some View {
         HStack(spacing: 10) {
-            Button {
-                store.archiveSelectedThread()
-            } label: {
-                Image(systemName: "archivebox")
+            if !store.hiddenToolbarButtons.contains("archive") {
+                Button {
+                    store.archiveSelectedThread()
+                } label: {
+                    toolbarLabel("Archive", icon: "archivebox")
+                }
+                .help("Archive")
             }
-            .help("Archive")
 
-            Button {
-                store.trashSelectedThread()
-            } label: {
-                Image(systemName: "trash")
+            if !store.hiddenToolbarButtons.contains("delete") {
+                Button {
+                    store.trashSelectedThread()
+                } label: {
+                    toolbarLabel("Delete", icon: "trash")
+                }
+                .help("Delete")
             }
-            .help("Delete")
 
-            Button {
-                store.toggleUnreadSelectedThread()
-            } label: {
-                Image(systemName: thread.isUnread ? "envelope.open" : "envelope.badge")
+            if !store.hiddenToolbarButtons.contains("unread") {
+                Button {
+                    store.toggleUnreadSelectedThread()
+                } label: {
+                    toolbarLabel(thread.isUnread ? "Mark Read" : "Mark Unread", icon: thread.isUnread ? "envelope.open" : "envelope.badge")
+                }
+                .help(thread.isUnread ? "Mark as read" : "Mark as unread")
             }
-            .help(thread.isUnread ? "Mark as read" : "Mark as unread")
 
-            Button {
-                store.modifySelectedThreadForSpam()
-            } label: {
-                Image(systemName: "exclamationmark.octagon")
+            if !store.hiddenToolbarButtons.contains("spam") {
+                Button {
+                    store.modifySelectedThreadForSpam()
+                } label: {
+                    toolbarLabel("Report Spam", icon: "exclamationmark.octagon")
+                }
+                .help("Report Spam")
             }
-            .help("Report spam")
 
-            Menu {
-                ForEach(store.customLabels) { label in
-                    Button("Apply \(label.name)") {
-                        store.apply(label: label, to: thread)
+            if !store.hiddenToolbarButtons.contains("labels") {
+                Menu {
+                    ForEach(store.customLabels) { label in
+                        Button("Apply \(label.name)") {
+                            store.apply(label: label, to: thread)
+                        }
                     }
-                }
-                Divider()
-                ForEach(store.customLabels.filter { thread.labelIds.contains($0.id) }) { label in
-                    Button("Remove \(label.name)") {
-                        store.remove(label: label, from: thread)
+                    Divider()
+                    ForEach(store.customLabels.filter { thread.labelIds.contains($0.id) }) { label in
+                        Button("Remove \(label.name)") {
+                            store.remove(label: label, from: thread)
+                        }
                     }
+                } label: {
+                    toolbarLabel("Labels", icon: "tag")
                 }
-            } label: {
-                Image(systemName: "tag")
+                .help("Labels")
             }
-            .help("Labels")
 
-            Menu {
-                Button("Load Full Thread") {
-                    store.loadSelectedThreadFromAPI()
+            if !store.hiddenToolbarButtons.contains("more") {
+                Menu {
+                    Button("Load Full Thread") {
+                        store.loadSelectedThreadFromAPI()
+                    }
+                    Button("Snooze") {
+                        store.errorMessage = "Snooze is reserved for a follow-up implementation because Gmail's snooze behavior is not exposed as a simple public Gmail API thread action."
+                    }
+                } label: {
+                    toolbarLabel("More", icon: "ellipsis.circle")
                 }
-                Button("Snooze") {
-                    store.errorMessage = "Snooze is reserved for a follow-up implementation because Gmail's snooze behavior is not exposed as a simple public Gmail API thread action."
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
+                .help("More")
             }
-            .help("More")
 
             Spacer()
         }
@@ -105,29 +132,27 @@ struct ReadingPaneView: View {
                 .fontWeight(.semibold)
                 .textSelection(.enabled)
 
-            HStack(spacing: 6) {
-                ForEach(store.labels.filter { thread.labelIds.contains($0.id) && $0.type != .system }) { label in
-                    Text(label.name)
-                        .font(.caption)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background((Color(hex: label.colorHex) ?? .secondary).opacity(0.18), in: Capsule())
+            if store.showLabelsOnMessages {
+                HStack(spacing: 6) {
+                    ForEach(store.labels.filter { thread.labelIds.contains($0.id) && $0.type != .system && !$0.name.uppercased().hasPrefix("CATEGORY_") }) { label in
+                        Text(label.name)
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background((Color(hex: label.colorHex) ?? .secondary).opacity(0.18), in: Capsule())
+                    }
                 }
             }
         }
     }
 }
 
-private struct MessageCardView: View {
+private struct MessageHeaderView: View {
     let message: GmailMessage
     @ObservedObject var store: MailStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if !message.attachments.isEmpty {
-                OutlookAttachmentStrip(attachments: message.attachments, store: store)
-            }
-
             HStack(alignment: .top) {
                 Circle()
                     .fill(.secondary.opacity(0.25))
@@ -137,7 +162,6 @@ private struct MessageCardView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(message.from)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.black)
                         .textSelection(.enabled)
                     Text("to \(message.to.joined(separator: ", "))")
                         .font(.caption)
@@ -152,15 +176,32 @@ private struct MessageCardView: View {
                     .foregroundStyle(.gray)
             }
 
+            if !message.attachments.isEmpty {
+                OutlookAttachmentStrip(attachments: message.attachments, store: store)
+            }
+        }
+    }
+
+    private var initials: String {
+        message.from.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()
+    }
+}
+
+private struct MessageBodyCard: View {
+    let message: GmailMessage
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
             if let htmlBody = message.htmlBody, !htmlBody.isEmpty {
                 HTMLMessageBodyView(html: htmlBody)
             } else {
-                Text(message.plainTextBody ?? message.snippet)
-                    .foregroundStyle(.black)
-                    .textSelection(.enabled)
-                    .lineSpacing(3)
+                ScrollView {
+                    Text(message.plainTextBody ?? message.snippet)
+                        .textSelection(.enabled)
+                        .lineSpacing(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
-
         }
         .padding(16)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
@@ -168,10 +209,6 @@ private struct MessageCardView: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.black.opacity(0.08), lineWidth: 1)
         }
-    }
-
-    private var initials: String {
-        message.from.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()
     }
 }
 
@@ -207,12 +244,24 @@ private struct OutlookAttachmentStrip: View {
 private struct AttachmentChip: View {
     let attachment: GmailAttachment
     @ObservedObject var store: MailStore
+    
+    @State private var previewURL: URL?
+    @State private var isPreparingPreview = false
+    @FocusState private var isFocused: Bool
+    @State private var isHovering = false
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: iconName)
-                .font(.title3)
-                .foregroundStyle(.gray)
+            ZStack {
+                Image(systemName: iconName)
+                    .font(.title3)
+                    .foregroundStyle(.gray)
+                    .opacity(isPreparingPreview ? 0.3 : 1)
+                
+                if isPreparingPreview {
+                    ProgressView().controlSize(.small)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(attachment.filename)
@@ -224,28 +273,60 @@ private struct AttachmentChip: View {
                     .foregroundStyle(.gray)
             }
 
-            Button {
-                store.previewAttachment(attachment)
-            } label: {
-                Image(systemName: "eye")
-            }
-            .buttonStyle(.plain)
-            .help("Preview")
+            Spacer()
 
-            Button {
-                saveAttachment()
-            } label: {
-                Image(systemName: attachment.isDownloaded ? "checkmark.circle" : "arrow.down.circle")
+            if isHovering {
+                Button {
+                    saveAttachment()
+                } label: {
+                    Image(systemName: attachment.isDownloaded ? "checkmark" : "arrow.down")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(attachment.isDownloaded ? .green : .blue)
+                        .padding(6)
+                        .background(Color.blue.opacity(0.1), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help(attachment.isDownloaded ? "Download again" : "Download")
+            } else {
+                Color.clear.frame(width: 26, height: 26)
             }
-            .buttonStyle(.plain)
-            .help(attachment.isDownloaded ? "Download again" : "Download")
         }
         .padding(8)
         .frame(width: 280, alignment: .leading)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+        .background(isFocused ? Color.blue.opacity(0.1) : Color.white, in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                .stroke(isFocused ? Color.blue : Color.black.opacity(0.1), lineWidth: 1)
+        }
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .focusable()
+        .focused($isFocused)
+        .onKeyPress(.space) {
+            preparePreview()
+            return .handled
+        }
+        .quickLookPreview($previewURL)
+    }
+
+    private func preparePreview() {
+        if let url = previewURL {
+            previewURL = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                previewURL = url
+            }
+            return
+        }
+        isPreparingPreview = true
+        Task {
+            do {
+                let url = try await store.localPreviewURL(for: attachment)
+                previewURL = url
+            } catch {
+                store.errorMessage = error.localizedDescription
+            }
+            isPreparingPreview = false
         }
     }
 

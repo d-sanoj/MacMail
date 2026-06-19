@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 
 @MainActor
 final class MailStore: ObservableObject {
@@ -19,10 +20,38 @@ final class MailStore: ObservableObject {
     @Published var showingSettings = false
     @Published private(set) var oauthSummary = GoogleOAuthClientStore.currentSummary()
 
+    @AppStorage("HiddenLabelIds") var hiddenLabelIdsRaw: String = ""
+
+    var hiddenLabelIds: Set<String> {
+        get { Set(hiddenLabelIdsRaw.split(separator: ",").map(String.init)) }
+        set { hiddenLabelIdsRaw = newValue.joined(separator: ",") }
+    }
+
+    @AppStorage("isSidebarCollapsed") var isSidebarCollapsed = false
+    @AppStorage("ShowLabelsOnMessages") var showLabelsOnMessages = true
+    @AppStorage("ShowToolbarText") var showToolbarText = true
+
+    @AppStorage("HiddenToolbarButtons") var hiddenToolbarButtonsRaw: String = ""
+    var hiddenToolbarButtons: Set<String> {
+        get { Set(hiddenToolbarButtonsRaw.split(separator: ",").map(String.init)) }
+        set { hiddenToolbarButtonsRaw = newValue.joined(separator: ",") }
+    }
+
+    func toggleToolbarButton(_ id: String, isVisible: Bool) {
+        var hidden = hiddenToolbarButtons
+        if isVisible {
+            hidden.remove(id)
+        } else {
+            hidden.insert(id)
+        }
+        hiddenToolbarButtons = hidden
+    }
+
     private let oauthService: GoogleOAuthService
     private let apiClient: GmailAPIClient
     private let cache: SQLiteCacheStore
     private let backgroundRefreshPageSize = 75
+    private var refreshTask: Task<Void, Never>?
 
     init(
         oauthService: GoogleOAuthService = GoogleOAuthService(tokenStore: LocalTokenStore()),
@@ -45,21 +74,56 @@ final class MailStore: ObservableObject {
     var filteredThreads: [GmailThread] {
         let selectedLabel = selectedMailbox.gmailLabelId
         let matchingMailbox = threads.filter { thread in
-            selectedLabel == GmailSystemLabel.allMail || thread.labelIds.contains(selectedLabel)
+            if thread.labelIds.contains(GmailSystemLabel.trash) {
+                return selectedLabel == GmailSystemLabel.trash
+            }
+            if thread.labelIds.contains(GmailSystemLabel.spam) {
+                return selectedLabel == GmailSystemLabel.spam
+            }
+            if selectedLabel == GmailCategoryLabel.primary {
+                return thread.labelIds.contains(GmailCategoryLabel.primary) || thread.labelIds.contains(GmailCategoryLabel.updates)
+            }
+            return selectedLabel == GmailSystemLabel.allMail || thread.labelIds.contains(selectedLabel)
         }
-        guard !searchText.isEmpty else {
-            return matchingMailbox
+        let results: [GmailThread]
+        if searchText.isEmpty {
+            results = matchingMailbox
+        } else {
+            results = matchingMailbox.filter {
+                $0.subject.localizedCaseInsensitiveContains(searchText)
+                    || $0.senderDisplay.localizedCaseInsensitiveContains(searchText)
+                    || $0.snippet.localizedCaseInsensitiveContains(searchText)
+            }
         }
-        return matchingMailbox.filter {
-            $0.subject.localizedCaseInsensitiveContains(searchText)
-                || $0.senderDisplay.localizedCaseInsensitiveContains(searchText)
-                || $0.snippet.localizedCaseInsensitiveContains(searchText)
+        return results.sorted { $0.lastMessageDate > $1.lastMessageDate }
+    }
+
+    func count(for selection: MailboxSelection) -> (unread: Int, total: Int) {
+        let labelId = selection.gmailLabelId
+        let matchingMailbox = threads.filter { thread in
+            if thread.labelIds.contains(GmailSystemLabel.trash) {
+                return labelId == GmailSystemLabel.trash
+            }
+            if thread.labelIds.contains(GmailSystemLabel.spam) {
+                return labelId == GmailSystemLabel.spam
+            }
+            if labelId == GmailSystemLabel.allMail {
+                return true
+            }
+            if labelId == GmailCategoryLabel.primary {
+                return thread.labelIds.contains(GmailCategoryLabel.primary) || thread.labelIds.contains(GmailCategoryLabel.updates)
+            }
+            return thread.labelIds.contains(labelId)
         }
+        let unread = matchingMailbox.filter { $0.isUnread }.count
+        return (unread, matchingMailbox.count)
     }
 
     var selectedMessages: [GmailMessage] {
         guard let selectedThread else { return [] }
-        return messages.filter { $0.threadId == selectedThread.id }
+        return messages
+            .filter { $0.threadId == selectedThread.id }
+            .sorted { $0.date > $1.date }
     }
 
     var systemLabels: [GmailLabel] {
@@ -156,7 +220,7 @@ final class MailStore: ObservableObject {
     }
 
     func refresh() async {
-        await syncAccountMailboxes(full: false, notifyNewMail: false, showMissingAccountError: true)
+        await syncAccountMailboxes(full: true, notifyNewMail: false, showMissingAccountError: true)
     }
 
     func syncAllOldMessages() async {
@@ -164,7 +228,7 @@ final class MailStore: ObservableObject {
     }
 
     func performBackgroundCheck() async {
-        await syncAccountMailboxes(full: false, notifyNewMail: true, showMissingAccountError: false)
+        await syncAccountMailboxes(full: true, notifyNewMail: true, showMissingAccountError: false)
     }
 
     func loadSelectedThreadFromAPI() {
@@ -189,7 +253,7 @@ final class MailStore: ObservableObject {
         }
     }
 
-    func sendPlainTextEmail(to: String, cc: String, bcc: String, subject: String, body: String) {
+    func sendEmail(to: String, cc: String, bcc: String, subject: String, plainText: String, htmlBody: String?, attachments: [URL]) {
         guard let account = selectedAccount else {
             errorMessage = "Sign in with a Gmail account before sending."
             return
@@ -198,13 +262,15 @@ final class MailStore: ObservableObject {
         Task {
             do {
                 let token = try await oauthService.validAccessToken(for: account)
-                let rawMessage = MIMEMessageBuilder.plainText(
+                let rawMessage = try MIMEMessageBuilder.build(
                     from: account.email,
                     to: to,
                     cc: cc,
                     bcc: bcc,
                     subject: subject,
-                    body: body
+                    plainText: plainText,
+                    htmlBody: htmlBody,
+                    attachments: attachments
                 )
                 try await apiClient.sendMessage(accessToken: token, rawRFC822Base64URL: rawMessage)
                 showingComposer = false
@@ -237,35 +303,27 @@ final class MailStore: ObservableObject {
         }
     }
 
-    func previewAttachment(_ attachment: GmailAttachment) {
+    func localPreviewURL(for attachment: GmailAttachment) async throws -> URL {
         if let localFileURL = attachment.localFileURL {
-            NSWorkspace.shared.open(localFileURL)
-            return
+            return localFileURL
         }
 
         let previewURL = FileManager.default.temporaryDirectory
             .appending(path: "GmailBoxPreviews", directoryHint: .isDirectory)
             .appending(path: attachment.filename)
 
-        Task {
-            do {
-                try FileManager.default.createDirectory(at: previewURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                guard let account = selectedAccount else {
-                    errorMessage = "Sign in with a Gmail account before previewing attachments."
-                    return
-                }
-                let token = try await oauthService.validAccessToken(for: account)
-                let data = try await apiClient.attachmentData(
-                    accessToken: token,
-                    messageId: attachment.messageId,
-                    attachmentId: attachment.attachmentId
-                )
-                try data.write(to: previewURL, options: [.atomic])
-                NSWorkspace.shared.open(previewURL)
-            } catch {
-                errorMessage = error.localizedDescription
-            }
+        try FileManager.default.createDirectory(at: previewURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard let account = selectedAccount else {
+            throw MailActionError.missingActiveAccount
         }
+        let token = try await oauthService.validAccessToken(for: account)
+        let data = try await apiClient.attachmentData(
+            accessToken: token,
+            messageId: attachment.messageId,
+            attachmentId: attachment.attachmentId
+        )
+        try data.write(to: previewURL, options: [.atomic])
+        return previewURL
     }
 
     func archiveSelectedThread() {
@@ -273,13 +331,27 @@ final class MailStore: ObservableObject {
     }
 
     func trashSelectedThread() {
-        guard let account = selectedAccount, let thread = selectedThread else { return }
+        guard let thread = selectedThread else { return }
+        trashThread(thread)
+    }
+
+    func trashThread(_ thread: GmailThread) {
+        guard let account = selectedAccount else { return }
         Task {
             do {
                 let token = try await oauthService.validAccessToken(for: account)
                 try await apiClient.trashThread(accessToken: token, threadId: thread.id)
-                threads.removeAll { $0.id == thread.id }
-                selectedThreadId = filteredThreads.first?.id
+                
+                if let index = threads.firstIndex(where: { $0.id == thread.id && $0.accountId == account.id }) {
+                    if !threads[index].labelIds.contains(GmailSystemLabel.trash) {
+                        threads[index].labelIds.append(GmailSystemLabel.trash)
+                    }
+                    try cache.saveThreads(threads.filter { $0.accountId == account.id }, accountId: account.id)
+                }
+                
+                if selectedThreadId == thread.id {
+                    selectedThreadId = filteredThreads.first?.id
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -313,6 +385,43 @@ final class MailStore: ObservableObject {
 
     func remove(label: GmailLabel, from thread: GmailThread) {
         modifyThread(thread, remove: [label.id])
+    }
+
+    func createLabel(name: String) {
+        guard let account = selectedAccount else {
+            errorMessage = "Sign in with a Gmail account before creating labels."
+            return
+        }
+
+        Task {
+            do {
+                let token = try await oauthService.validAccessToken(for: account)
+                var newLabel = try await apiClient.createLabel(accessToken: token, name: name)
+                newLabel.accountId = account.id
+                labels.append(newLabel)
+                try cache.saveLabels(labels.filter { $0.accountId == account.id }, accountId: account.id)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func deleteLabel(_ label: GmailLabel) {
+        guard let account = selectedAccount else { return }
+
+        Task {
+            do {
+                let token = try await oauthService.validAccessToken(for: account)
+                try await apiClient.deleteLabel(accessToken: token, labelId: label.id)
+                labels.removeAll { $0.id == label.id && $0.accountId == account.id }
+                try cache.saveLabels(labels.filter { $0.accountId == account.id }, accountId: account.id)
+                if case .label(let id) = selectedMailbox, id == label.id {
+                    selectedMailbox = .system(GmailSystemLabel.inbox)
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     private func modifySelectedThread(add: [String] = [], remove: [String] = []) {
@@ -529,7 +638,7 @@ final class MailStore: ObservableObject {
                 existing.hasAttachments = existing.hasAttachments || thread.hasAttachments
             }
 
-            existing.labelIds = Array(Set(existing.labelIds + thread.labelIds)).sorted()
+            existing.labelIds = thread.labelIds.sorted()
             existing.isUnread = existing.labelIds.contains(GmailSystemLabel.unread)
             existing.isStarred = existing.labelIds.contains(GmailSystemLabel.starred)
             mergedThreads[thread.id] = existing
@@ -579,5 +688,22 @@ final class MailStore: ObservableObject {
             }
         }
         return trimmed.isEmpty ? "Unknown sender" : trimmed
+    }
+
+    func startBackgroundRefresh() {
+        refreshTask?.cancel()
+        refreshTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
+                if !Task.isCancelled {
+                    await performBackgroundCheck()
+                }
+            }
+        }
+    }
+
+    func stopBackgroundRefresh() {
+        refreshTask?.cancel()
+        refreshTask = nil
     }
 }
