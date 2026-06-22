@@ -478,10 +478,14 @@ private struct GmailMessagePart: Decodable {
         let lowercasedFilename = filename.lowercased()
         let contentDisposition = header("Content-Disposition")?.lowercased() ?? ""
         let contentID = header("Content-ID") ?? header("Content-Id")
+        let isExplicitAttachment = contentDisposition.contains("attachment")
 
-        // If it has a Content-ID, it's explicitly meant for inline CID embedding.
-        if contentID != nil {
-            return false
+        // If it has a Content-ID, it's explicitly meant for inline CID embedding,
+        // UNLESS it's explicitly marked as an attachment or isn't an image/video.
+        if contentID != nil && !isExplicitAttachment {
+            if mimeType?.hasPrefix("image/") == true || mimeType?.hasPrefix("video/") == true {
+                return false
+            }
         }
         
         // Some clients send images as inline without CID but reference them via URL.

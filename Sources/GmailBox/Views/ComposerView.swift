@@ -20,6 +20,7 @@ struct ComposerView: View {
     @State private var threadId: String?
     @State private var inReplyTo: String?
     @State private var references: String?
+    @State private var hiddenTrailingQuoteHTML: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -93,7 +94,7 @@ struct ComposerView: View {
             threadId = msg.threadId
             inReplyTo = msg.messageId
             references = msg.messageId
-            setupQuotedBody(msg)
+            setupQuotedBody(msg, isHidden: true)
         case .replyAll(let msg):
             var allTo = msg.to
             if !allTo.contains(msg.from) { allTo.append(msg.from) }
@@ -103,15 +104,15 @@ struct ComposerView: View {
             threadId = msg.threadId
             inReplyTo = msg.messageId
             references = msg.messageId
-            setupQuotedBody(msg)
+            setupQuotedBody(msg, isHidden: true)
         case .forward(let msg):
             subject = msg.subject.lowercased().hasPrefix("fwd:") ? msg.subject : "Fwd: \(msg.subject)"
             threadId = msg.threadId
-            setupQuotedBody(msg)
+            setupQuotedBody(msg, isHidden: false)
         }
     }
 
-    private func setupQuotedBody(_ msg: GmailMessage) {
+    private func setupQuotedBody(_ msg: GmailMessage, isHidden: Bool) {
         let df = DateFormatter()
         df.dateStyle = .medium
         df.timeStyle = .short
@@ -120,17 +121,21 @@ struct ComposerView: View {
         let quotedHTML = "<blockquote>\(msg.htmlBody ?? msg.plainTextBody ?? "")</blockquote></div>"
         let finalHTML = headerStr + quotedHTML
         
-        if let data = finalHTML.data(using: .utf8),
-           let attrStr = try? NSMutableAttributedString(
-            data: data,
-            options: [.documentType: NSAttributedString.DocumentType.html,
-                      .characterEncoding: String.Encoding.utf8.rawValue],
-            documentAttributes: nil) {
-            
-            let fullRange = NSRange(location: 0, length: attrStr.length)
-            attrStr.addAttribute(.font, value: NSFont.systemFont(ofSize: 14), range: fullRange)
-            
-            self.bodyText = attrStr
+        if isHidden {
+            self.hiddenTrailingQuoteHTML = finalHTML
+        } else {
+            if let data = finalHTML.data(using: .utf8),
+               let attrStr = try? NSMutableAttributedString(
+                data: data,
+                options: [.documentType: NSAttributedString.DocumentType.html,
+                          .characterEncoding: String.Encoding.utf8.rawValue],
+                documentAttributes: nil) {
+                
+                let fullRange = NSRange(location: 0, length: attrStr.length)
+                attrStr.addAttribute(.font, value: NSFont.systemFont(ofSize: 14), range: fullRange)
+                
+                self.bodyText = attrStr
+            }
         }
     }
 
@@ -162,7 +167,13 @@ struct ComposerView: View {
             htmlString = htmlString.replacingOccurrences(of: "[[[CID:\(img.cid)]]]", with: "<img src=\"cid:\(img.cid)\" />")
         }
         
-        return (htmlString, plainText, inlineImages)
+        var finalPlainText = plainText
+        if let hiddenQuote = hiddenTrailingQuoteHTML {
+            htmlString += hiddenQuote
+            // Optionally add a plain text version of the quote, but HTML usually takes precedence
+        }
+        
+        return (htmlString, finalPlainText, inlineImages)
     }
 
     private var titleText: String {
