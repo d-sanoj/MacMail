@@ -17,31 +17,25 @@ struct ComposerView: View {
     @State private var isShowingSignatureEditor = false
     @State private var scheduleDate = Date().addingTimeInterval(3600)
     @State private var showSchedulePicker = false
-
+    @State private var threadId: String?
+    @State private var inReplyTo: String?
+    @State private var references: String?
 
     var body: some View {
-        ZStack {
-            AnimatedGlassBackground()
-            
-            VStack(spacing: 0) {
-                titleBar
+        VStack(spacing: 0) {
+            titleBar
 
-                VStack(spacing: 10) {
-                    field("To", text: $to)
-                    field("Cc", text: $cc)
-                    field("Bcc", text: $bcc)
-                    field("Subject", text: $subject)
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+            VStack(spacing: 0) {
+                field("To", text: $to)
+                field("Cc", text: $cc)
+                field("Bcc", text: $bcc)
+                field("Subject", text: $subject)
 
                 RichTextEditor(attributedText: $bodyText)
                     .frame(minHeight: 230)
-                    .background(Color.black.opacity(0.15))
-                    .cornerRadius(8)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+                    .background(Color.white)
+                    .colorScheme(.light)
+                    .padding(2)
 
                 if !attachments.isEmpty {
                     AttachmentShelf(attachments: $attachments)
@@ -57,12 +51,9 @@ struct ComposerView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 actionToolbar
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
+            .padding(12)
         }
-        .background(.ultraThinMaterial)
-        .frame(width: 760, height: 680)
-        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
+        .frame(width: 760, height: 620)
         .sheet(isPresented: $showingLinkSheet) {
             linkSheet
         }
@@ -82,12 +73,64 @@ struct ComposerView: View {
             .frame(width: 400)
         }
         .onAppear {
+            setupComposeAction()
             if !signature.isEmpty {
                 let attrSig = NSAttributedString(string: "\n\n--\n\(signature)")
                 let mut = NSMutableAttributedString(attributedString: bodyText)
                 mut.append(attrSig)
                 bodyText = mut
             }
+        }
+    }
+
+    private func setupComposeAction() {
+        switch store.composeAction {
+        case .new:
+            break
+        case .reply(let msg):
+            to = msg.from
+            subject = msg.subject.lowercased().hasPrefix("re:") ? msg.subject : "Re: \(msg.subject)"
+            threadId = msg.threadId
+            inReplyTo = msg.messageId
+            references = msg.messageId
+            setupQuotedBody(msg)
+        case .replyAll(let msg):
+            var allTo = msg.to
+            if !allTo.contains(msg.from) { allTo.append(msg.from) }
+            to = allTo.joined(separator: ", ")
+            cc = msg.cc.joined(separator: ", ")
+            subject = msg.subject.lowercased().hasPrefix("re:") ? msg.subject : "Re: \(msg.subject)"
+            threadId = msg.threadId
+            inReplyTo = msg.messageId
+            references = msg.messageId
+            setupQuotedBody(msg)
+        case .forward(let msg):
+            subject = msg.subject.lowercased().hasPrefix("fwd:") ? msg.subject : "Fwd: \(msg.subject)"
+            threadId = msg.threadId
+            setupQuotedBody(msg)
+        }
+    }
+
+    private func setupQuotedBody(_ msg: GmailMessage) {
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        df.timeStyle = .short
+        
+        let headerStr = "<br><br><br>On \(df.string(from: msg.date)), \(msg.from) wrote:<br>"
+        let quotedHTML = "<blockquote>\(msg.htmlBody ?? msg.plainTextBody ?? "")</blockquote>"
+        let finalHTML = headerStr + quotedHTML
+        
+        if let data = finalHTML.data(using: .utf8),
+           let attrStr = try? NSMutableAttributedString(
+            data: data,
+            options: [.documentType: NSAttributedString.DocumentType.html,
+                      .characterEncoding: String.Encoding.utf8.rawValue],
+            documentAttributes: nil) {
+            
+            let fullRange = NSRange(location: 0, length: attrStr.length)
+            attrStr.addAttribute(.font, value: NSFont.systemFont(ofSize: 14), range: fullRange)
+            
+            self.bodyText = attrStr
         }
     }
 
@@ -122,22 +165,29 @@ struct ComposerView: View {
         return (htmlString, plainText, inlineImages)
     }
 
+    private var titleText: String {
+        switch store.composeAction {
+        case .new: return "New Message"
+        case .reply: return "Reply"
+        case .replyAll: return "Reply All"
+        case .forward: return "Forward"
+        }
+    }
+
     private var titleBar: some View {
         HStack {
-            Text("New Message")
+            Text(titleText)
                 .font(.headline)
             Spacer()
             Button {
                 dismiss()
             } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.secondary)
-                    .imageScale(.large)
+                Image(systemName: "xmark")
             }
             .buttonStyle(.plain)
         }
-        .padding(16)
-        .background(Color.clear)
+        .padding(12)
+        .background(.bar)
     }
 
     private var formattingToolbar: some View {
@@ -201,11 +251,9 @@ struct ComposerView: View {
         }
         .buttonStyle(.plain)
         .controlSize(.regular)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.2), lineWidth: 1))
-        .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(.quaternary.opacity(0.55), in: Capsule())
     }
 
     private var actionToolbar: some View {
@@ -221,7 +269,10 @@ struct ComposerView: View {
                         plainText: payload.plainText,
                         htmlBody: payload.html,
                         attachments: attachments.map(\.url),
-                        inlineImages: payload.inlineImages
+                        inlineImages: payload.inlineImages,
+                        threadId: threadId,
+                        inReplyTo: inReplyTo,
+                        references: references
                     )
                 } label: {
                     Text("Send")
@@ -255,7 +306,10 @@ struct ComposerView: View {
                             to: to, cc: cc, bcc: bcc, subject: subject,
                             plainText: payload.plainText, htmlBody: payload.html,
                             attachments: attachments.map(\.url), inlineImages: payload.inlineImages,
-                            date: selectedDate
+                            date: selectedDate,
+                            threadId: threadId,
+                            inReplyTo: inReplyTo,
+                            references: references
                         )
                         showSchedulePicker = false
                         dismiss()
@@ -355,13 +409,14 @@ struct ComposerView: View {
             Text(title)
                 .foregroundStyle(.secondary)
                 .frame(width: 64, alignment: .trailing)
-            TextField("", text: text)
+            TextField(title, text: text)
                 .textFieldStyle(.plain)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
     }
 
     private func toggleFormat(_ title: String, icon: String, isOn: Binding<Bool>) -> some View {
@@ -451,47 +506,6 @@ private struct AttachmentShelf: View {
                 }
                 .padding(8)
                 .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
-            }
-        }
-    }
-}
-
-struct AnimatedGlassBackground: View {
-    @State private var animate = false
-    
-    var body: some View {
-        ZStack {
-            Color(NSColor.windowBackgroundColor).opacity(0.5)
-            
-            GeometryReader { geometry in
-                let width = geometry.size.width
-                let height = geometry.size.height
-                
-                Circle()
-                    .fill(Color.blue.opacity(0.4))
-                    .frame(width: width * 0.8)
-                    .blur(radius: 80)
-                    .offset(x: animate ? width * 0.1 : -width * 0.1,
-                            y: animate ? -height * 0.2 : height * 0.2)
-                
-                Circle()
-                    .fill(Color.purple.opacity(0.4))
-                    .frame(width: width * 0.6)
-                    .blur(radius: 80)
-                    .offset(x: animate ? -width * 0.2 : width * 0.2,
-                            y: animate ? height * 0.3 : -height * 0.1)
-                
-                Circle()
-                    .fill(Color.pink.opacity(0.4))
-                    .frame(width: width * 0.7)
-                    .blur(radius: 80)
-                    .offset(x: animate ? width * 0.3 : -width * 0.1,
-                            y: animate ? height * 0.1 : -height * 0.3)
-            }
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) {
-                animate.toggle()
             }
         }
     }

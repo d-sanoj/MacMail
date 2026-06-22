@@ -7,7 +7,7 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             Button {
-                store.showingComposer = true
+                store.openComposer()
             } label: {
                 ZStack(alignment: .leading) {
                     Image(systemName: "square.and.pencil")

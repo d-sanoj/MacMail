@@ -232,6 +232,7 @@ final class GmailAPIClient {
                 cc: message.header("Cc").map { [$0] } ?? [],
                 bcc: message.header("Bcc").map { [$0] } ?? [],
                 subject: message.header("Subject") ?? "(No subject)",
+                messageId: message.header("Message-ID"),
                 date: message.internalDate.flatMap { TimeInterval($0) }.map { Date(timeIntervalSince1970: $0 / 1000) } ?? Date(),
                 snippet: message.snippet ?? "",
                 plainTextBody: message.payload?.plainTextBody,
@@ -258,13 +259,21 @@ final class GmailAPIClient {
         _ = try await send(path: "threads/\(threadId)/trash", method: "POST", accessToken: accessToken)
     }
 
-    func sendMessage(accessToken: String, rawRFC822Base64URL: String) async throws {
-        let body = try JSONSerialization.data(withJSONObject: ["raw": rawRFC822Base64URL])
+    func sendMessage(accessToken: String, rawRFC822Base64URL: String, threadId: String? = nil) async throws {
+        var params: [String: Any] = ["raw": rawRFC822Base64URL]
+        if let threadId = threadId {
+            params["threadId"] = threadId
+        }
+        let body = try JSONSerialization.data(withJSONObject: params)
         _ = try await send(path: "messages/send", method: "POST", body: body, accessToken: accessToken)
     }
 
-    func createDraft(accessToken: String, rawRFC822Base64URL: String) async throws -> String {
-        let body = try JSONSerialization.data(withJSONObject: ["message": ["raw": rawRFC822Base64URL]])
+    func createDraft(accessToken: String, rawRFC822Base64URL: String, threadId: String? = nil) async throws -> String {
+        var messagePayload: [String: Any] = ["raw": rawRFC822Base64URL]
+        if let threadId = threadId {
+            messagePayload["threadId"] = threadId
+        }
+        let body = try JSONSerialization.data(withJSONObject: ["message": messagePayload])
         let responseData = try await send(path: "drafts", method: "POST", body: body, accessToken: accessToken)
         struct Response: Decodable { let id: String }
         let decoded = try JSONDecoder().decode(Response.self, from: responseData)

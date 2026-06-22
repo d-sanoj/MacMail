@@ -46,6 +46,7 @@ struct GmailMessage: Identifiable, Codable, Hashable {
     var cc: [String]
     var bcc: [String]
     var subject: String
+    var messageId: String?
     var date: Date
     var snippet: String
     var plainTextBody: String?

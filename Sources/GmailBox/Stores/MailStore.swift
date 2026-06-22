@@ -2,6 +2,13 @@ import AppKit
 import Foundation
 import SwiftUI
 
+enum ComposeAction: Equatable {
+    case new
+    case reply(GmailMessage)
+    case replyAll(GmailMessage)
+    case forward(GmailMessage)
+}
+
 @MainActor
 final class MailStore: ObservableObject {
     @Published private(set) var accounts: [GmailAccount] = []
@@ -19,6 +26,7 @@ final class MailStore: ObservableObject {
     @Published private(set) var lastSyncDate: Date?
     @Published var errorMessage: String?
     @Published var showingComposer = false
+    @Published var composeAction: ComposeAction = .new
     @Published var showingSettings = false
     @Published private(set) var oauthSummary = GoogleOAuthClientStore.currentSummary()
 
@@ -43,6 +51,11 @@ final class MailStore: ObservableObject {
     var hiddenToolbarButtons: Set<String> {
         get { Set(hiddenToolbarButtonsRaw.split(separator: ",").map(String.init)) }
         set { hiddenToolbarButtonsRaw = newValue.joined(separator: ",") }
+    }
+
+    func openComposer(for action: ComposeAction = .new) {
+        composeAction = action
+        showingComposer = true
     }
 
     func toggleToolbarButton(_ id: String, isVisible: Bool) {
@@ -310,7 +323,7 @@ final class MailStore: ObservableObject {
         }
     }
 
-    func sendEmail(to: String, cc: String, bcc: String, subject: String, plainText: String, htmlBody: String?, attachments: [URL], inlineImages: [(cid: String, data: Data, mimeType: String)] = []) {
+    func sendEmail(to: String, cc: String, bcc: String, subject: String, plainText: String, htmlBody: String?, attachments: [URL], inlineImages: [(cid: String, data: Data, mimeType: String)] = [], threadId: String? = nil, inReplyTo: String? = nil, references: String? = nil) {
         guard let account = selectedAccount else {
             errorMessage = "Sign in with a Gmail account before sending."
             return
@@ -328,9 +341,11 @@ final class MailStore: ObservableObject {
                     plainText: plainText,
                     htmlBody: htmlBody,
                     attachments: attachments,
-                    inlineImages: inlineImages
+                    inlineImages: inlineImages,
+                    inReplyTo: inReplyTo,
+                    references: references
                 )
-                try await apiClient.sendMessage(accessToken: token, rawRFC822Base64URL: rawMessage)
+                try await apiClient.sendMessage(accessToken: token, rawRFC822Base64URL: rawMessage, threadId: threadId)
                 showingComposer = false
                 await refresh()
             } catch {
@@ -339,7 +354,7 @@ final class MailStore: ObservableObject {
         }
     }
 
-    func scheduleEmail(to: String, cc: String, bcc: String, subject: String, plainText: String, htmlBody: String?, attachments: [URL], inlineImages: [(cid: String, data: Data, mimeType: String)] = [], date: Date) {
+    func scheduleEmail(to: String, cc: String, bcc: String, subject: String, plainText: String, htmlBody: String?, attachments: [URL], inlineImages: [(cid: String, data: Data, mimeType: String)] = [], date: Date, threadId: String? = nil, inReplyTo: String? = nil, references: String? = nil) {
         guard let account = selectedAccount else {
             errorMessage = "Sign in with a Gmail account before scheduling."
             return
@@ -356,7 +371,9 @@ final class MailStore: ObservableObject {
                 plainText: plainText,
                 htmlBody: htmlBody,
                 attachments: attachments,
-                inlineImages: inlineImages
+                inlineImages: inlineImages,
+                inReplyTo: inReplyTo,
+                references: references
             )
         } catch {
             errorMessage = "Failed to build scheduled message: \(error.localizedDescription)"
@@ -366,7 +383,7 @@ final class MailStore: ObservableObject {
         Task {
             do {
                 let token = try await oauthService.validAccessToken(for: account)
-                let draftId = try await apiClient.createDraft(accessToken: token, rawRFC822Base64URL: rawMessage)
+                let draftId = try await apiClient.createDraft(accessToken: token, rawRFC822Base64URL: rawMessage, threadId: threadId)
                 
                 // Set up local timer to send it when the date arrives. 
                 // A robust solution would persist this to UserDefaults.

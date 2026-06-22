@@ -187,9 +187,38 @@ private struct MessageHeaderView: View {
 
                 Spacer()
 
-                Text(message.date.mailboxTimestamp)
-                    .font(.caption)
-                    .foregroundStyle(.gray)
+                HStack(spacing: 12) {
+                    Text(message.date.mailboxTimestamp)
+                        .font(.caption)
+                        .foregroundStyle(.gray)
+                    HStack(spacing: 16) {
+                        Button {
+                            store.openComposer(for: .reply(message))
+                        } label: {
+                            Image(systemName: "arrowshape.turn.up.left")
+                        }
+                        .help("Reply")
+                        
+                        Button {
+                            store.openComposer(for: .replyAll(message))
+                        } label: {
+                            Image(systemName: "arrowshape.turn.up.left.2")
+                        }
+                        .help("Reply All")
+                        
+                        Button {
+                            store.openComposer(for: .forward(message))
+                        } label: {
+                            Image(systemName: "arrowshape.turn.up.right")
+                        }
+                        .help("Forward")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.secondary.opacity(0.1), in: Capsule())
+                }
             }
 
             if !message.attachments.isEmpty {

@@ -11,7 +11,9 @@ enum MIMEMessageBuilder {
         plainText: String,
         htmlBody: String?,
         attachments: [URL],
-        inlineImages: [(cid: String, data: Data, mimeType: String)] = []
+        inlineImages: [(cid: String, data: Data, mimeType: String)] = [],
+        inReplyTo: String? = nil,
+        references: String? = nil
     ) throws -> String {
         let mixedBoundary = "MixedBoundary-\(UUID().uuidString)"
         let relatedBoundary = "RelatedBoundary-\(UUID().uuidString)"
@@ -23,6 +25,13 @@ enum MIMEMessageBuilder {
             "Subject: \(encodedHeader(subject))",
             "MIME-Version: 1.0"
         ]
+
+        if let inReplyTo = inReplyTo {
+            lines.append("In-Reply-To: \(inReplyTo)")
+        }
+        if let references = references {
+            lines.append("References: \(references)")
+        }
 
         if !cc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             lines.append("Cc: \(cc)")
