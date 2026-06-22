@@ -116,8 +116,8 @@ struct ComposerView: View {
         df.dateStyle = .medium
         df.timeStyle = .short
         
-        let headerStr = "<br><br><br>On \(df.string(from: msg.date)), \(msg.from) wrote:<br>"
-        let quotedHTML = "<blockquote>\(msg.htmlBody ?? msg.plainTextBody ?? "")</blockquote>"
+        let headerStr = "<br><br><div class=\"gmail_quote\" dir=\"auto\">On \(df.string(from: msg.date)), \(msg.from) wrote:<br>"
+        let quotedHTML = "<blockquote>\(msg.htmlBody ?? msg.plainTextBody ?? "")</blockquote></div>"
         let finalHTML = headerStr + quotedHTML
         
         if let data = finalHTML.data(using: .utf8),

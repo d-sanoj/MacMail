@@ -58,6 +58,11 @@ private struct HTMLWebView: NSViewRepresentable {
             table { max-width: 100%; border-collapse: collapse; }
             pre { white-space: pre-wrap; }
             a { color: -apple-system-link; }
+            
+            /* Collapse repetitive quote chains mimicking Gmail's thread view */
+            .gmail_quote, .gmail_extra, blockquote[type="cite"] {
+              display: none !important;
+            }
           </style>
         </head>
         <body>
