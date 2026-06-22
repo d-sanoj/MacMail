@@ -128,21 +128,25 @@ struct ComposerView: View {
 
     private var formattingToolbar: some View {
         HStack(spacing: 6) {
-            Button("B") { NSApp.sendAction(#selector(NSFontManager.addFontTrait(_:)), to: nil, from: TraitSender(tag: 2)) }
+            Button("B") { NSFontManager.shared.addFontTrait(TraitSender(tag: 2)) }
                 .font(.system(size: 14, weight: .bold))
                 .help("Bold (Cmd-B)")
-            Button("I") { NSApp.sendAction(#selector(NSFontManager.addFontTrait(_:)), to: nil, from: TraitSender(tag: 1)) }
+                .focusable(false)
+            Button("I") { NSFontManager.shared.addFontTrait(TraitSender(tag: 1)) }
                 .font(.system(size: 14, weight: .medium).italic())
                 .help("Italic (Cmd-I)")
+                .focusable(false)
             Button("U") { NSApp.sendAction(#selector(NSTextView.underline(_:)), to: nil, from: nil) }
                 .font(.system(size: 14, weight: .medium))
                 .underline()
                 .help("Underline (Cmd-U)")
+                .focusable(false)
             
             Divider().frame(height: 22)
 
-            Button("Font Panel") { NSApp.sendAction(#selector(NSFontManager.orderFrontFontPanel(_:)), to: nil, from: nil) }
+            Button("Font Panel") { NSFontManager.shared.orderFrontFontPanel(nil) }
                 .help("Show Font Panel (Cmd-T)")
+                .focusable(false)
 
             Menu {
                 Button("Black") {}

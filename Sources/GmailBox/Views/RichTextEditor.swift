@@ -22,6 +22,7 @@ struct RichTextEditor: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
+        textView.textContainerInset = NSSize(width: 12, height: 12)
         textView.backgroundColor = .clear
         
         scrollView.documentView = textView

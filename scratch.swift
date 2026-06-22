@@ -1,4 +1,9 @@
 import AppKit
 
-print(NSTextView.instancesRespond(to: Selector("underline:")))
-print(NSTextView.instancesRespond(to: Selector("alignLeft:")))
+class TraitSender: NSObject {
+    @objc var tag: Int
+    init(tag: Int) { self.tag = tag }
+}
+
+let sender = TraitSender(tag: 2)
+print("Tag: \(sender.tag)")
