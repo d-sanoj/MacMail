@@ -1,54 +1,52 @@
-# MacMail
+# MacMail <img src="AppLogo/icon.png" width="32" height="32" />
 
-MacMail (formerly GmailBox) is a fast, native macOS email client built specifically for Gmail and Google Calendar. It abandons heavy web wrappers in favor of a sleek, performant architecture built purely with Swift, SwiftUI, and AppKit. 
+MacMail is a native macOS email client designed specifically for Gmail and Google Calendar, built with Swift, SwiftUI, and AppKit. It interfaces directly with the Google APIs using OAuth 2.0 and stores data in a local SQLite database, avoiding the use of web wrappers.
 
-Designed for speed and productivity, MacMail follows familiar standard macOS Mail paradigms while offering deep integration with the Google ecosystem.
+## Features
 
-## ✨ Features
+### Architecture
+- **Native UI**: Built with SwiftUI and AppKit.
+- **SQLite Caching**: Local caching of emails, threads, labels, and synchronization states using an SQLite database.
+- **Dark Mode Support**: Adheres to system-wide appearance settings.
 
-### Native Architecture
-- **100% Native UI**: Built entirely with SwiftUI and AppKit. No embedded web browsers, no Electron, no lag.
-- **SQLite Caching**: Lightning-fast offline access. Emails, threads, labels, and sync states are all cached locally in a robust SQLite database.
-- **Dark Mode Support**: Seamlessly adapts to your system theme with beautiful, high-contrast aesthetics and custom glassmorphism effects.
-
-### Email Experience
-- **Multi-Account Support**: Add and easily switch between multiple Google accounts from the top navigation bar.
-- **Three-Column Layout**: A classic, highly productive layout featuring a collapsible Sidebar, a dense Thread List, and a spacious Reading Pane.
-- **Undo Send**: Make a mistake? You have a 5-second grace period to cleanly recall any email before it hits the network.
-- **Rich Text Composer**: Format emails with bold, italics, underline, lists, indents, and font colors.
-- **Google Drive Integration**: Insert links to Google Drive files directly into your composer.
-- **Inline Attachments**: Drag and drop images directly into the composer.
-- **Custom Signatures**: Add a custom text signature and photo that automatically populates when writing new messages.
+### Email Operations
+- **Multi-Account Support**: Authenticate and switch between multiple Google accounts.
+- **Three-Column Layout**: Includes a collapsible sidebar, a thread list, and a reading pane.
+- **Undo Send**: Provides a 5-second delay before dispatching emails to the network, allowing message recall.
+- **Rich Text Composer**: Supports bold, italics, underline, lists, indents, and font colors.
+- **Google Drive Integration**: Insert links to Google Drive files directly into messages.
+- **Inline Attachments**: Support for image drag-and-drop within the composer.
+- **Custom Signatures**: Supports custom text and image signatures appended automatically to new messages.
 
 ### Google Calendar Integration
-- **Agenda Sidebar**: Toggle a sleek calendar panel on the right side of the screen to view your upcoming events without leaving your inbox.
-- **Smart Meet Links**: Event cards automatically detect Google Meet links, offering a quick "Join Meet" button to instantly jump into video calls.
+- **Agenda Sidebar**: A dedicated panel for viewing upcoming calendar events.
+- **Smart Meet Links**: Automatically extracts and displays a "Join Meet" button for events containing Google Meet URLs.
 
-## 🚀 Setup & Installation
+## Setup & Installation
 
-Because MacMail is a native client that directly interfaces with your personal Google data, you must configure a Google Cloud Project to generate OAuth credentials. This keeps your data entirely within your control.
+MacMail requires a configured Google Cloud Project to generate OAuth credentials.
 
-> **Read the full setup guide here:** [GOOGLE_API_SETUP.md](GOOGLE_API_SETUP.md)
+> **Setup Instructions:** Please refer to [GOOGLE_API_SETUP.md](GOOGLE_API_SETUP.md) for detailed configuration steps.
 
-### Building the Source
-To compile the application locally:
+### Building from Source
+
+To compile the application via command line:
 ```bash
 swift build
 ```
 
-To build and run the macOS App bundle (complete with app icon):
+To build and package the macOS App bundle (including the application icon):
 ```bash
 ./script/build_and_run.sh
 ```
 
-## 🔒 Privacy & Security
+## Security
 
-MacMail is built with security as a first principle:
-- **No Middlemen**: The app communicates directly with Google's API servers. There are no intermediary servers or proxy services tracking your data.
-- **No Password Access**: The app uses secure OAuth 2.0. It never sees, stores, or transmits your Google password.
-- **Local Storage**: All emails, calendar events, and OAuth tokens are stored locally on your hard drive in a secure SQLite database inside your user Library directory.
+- **Direct Communication**: Interfaces directly with Google's API servers.
+- **OAuth 2.0 Authorization**: Operates without requesting or storing user passwords.
+- **Local Data Storage**: All cached emails, calendar events, and OAuth tokens are stored exclusively on the local machine within the user's Library directory.
 
-## 🛠 Tech Stack
+## Technical Specifications
 - Language: Swift 5.10
 - Frameworks: SwiftUI, AppKit, Foundation
 - Network: URLSession
