@@ -45,10 +45,9 @@ struct ScheduleSendView: View {
             }
             
             if showingCustomPicker {
-                VStack {
-                    DatePicker("", selection: $customDate, in: Date()...)
-                        .datePickerStyle(.graphical)
-                        .labelsHidden()
+                VStack(spacing: 12) {
+                    DatePicker("Date & Time:", selection: $customDate, in: Date()...)
+                        .datePickerStyle(.stepperField)
                     
                     Button("Schedule Send") {
                         onSchedule(customDate)

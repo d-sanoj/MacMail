@@ -20,19 +20,28 @@ struct ComposerView: View {
 
 
     var body: some View {
-        VStack(spacing: 0) {
-            titleBar
-
+        ZStack {
+            AnimatedGlassBackground()
+            
             VStack(spacing: 0) {
-                field("To", text: $to)
-                field("Cc", text: $cc)
-                field("Bcc", text: $bcc)
-                field("Subject", text: $subject)
+                titleBar
+
+                VStack(spacing: 10) {
+                    field("To", text: $to)
+                    field("Cc", text: $cc)
+                    field("Bcc", text: $bcc)
+                    field("Subject", text: $subject)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
 
                 RichTextEditor(attributedText: $bodyText)
                     .frame(minHeight: 230)
-                    .background(Color(NSColor.textBackgroundColor))
-                    .padding(2)
+                    .background(Color.black.opacity(0.15))
+                    .cornerRadius(8)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
 
                 if !attachments.isEmpty {
                     AttachmentShelf(attachments: $attachments)
@@ -48,9 +57,12 @@ struct ComposerView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 actionToolbar
             }
-            .padding(12)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
         }
-        .frame(width: 760, height: 620)
+        .background(.ultraThinMaterial)
+        .frame(width: 760, height: 680)
+        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 10)
         .sheet(isPresented: $showingLinkSheet) {
             linkSheet
         }
@@ -118,12 +130,14 @@ struct ComposerView: View {
             Button {
                 dismiss()
             } label: {
-                Image(systemName: "xmark")
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+                    .imageScale(.large)
             }
             .buttonStyle(.plain)
         }
-        .padding(12)
-        .background(.bar)
+        .padding(16)
+        .background(Color.clear)
     }
 
     private var formattingToolbar: some View {
@@ -187,9 +201,11 @@ struct ComposerView: View {
         }
         .buttonStyle(.plain)
         .controlSize(.regular)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(.quaternary.opacity(0.55), in: Capsule())
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.2), lineWidth: 1))
+        .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
     }
 
     private var actionToolbar: some View {
@@ -339,14 +355,13 @@ struct ComposerView: View {
             Text(title)
                 .foregroundStyle(.secondary)
                 .frame(width: 64, alignment: .trailing)
-            TextField(title, text: text)
+            TextField("", text: text)
                 .textFieldStyle(.plain)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .overlay(alignment: .bottom) {
-            Divider()
-        }
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
     }
 
     private func toggleFormat(_ title: String, icon: String, isOn: Binding<Bool>) -> some View {
@@ -436,6 +451,47 @@ private struct AttachmentShelf: View {
                 }
                 .padding(8)
                 .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+            }
+        }
+    }
+}
+
+struct AnimatedGlassBackground: View {
+    @State private var animate = false
+    
+    var body: some View {
+        ZStack {
+            Color(NSColor.windowBackgroundColor).opacity(0.5)
+            
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let height = geometry.size.height
+                
+                Circle()
+                    .fill(Color.blue.opacity(0.4))
+                    .frame(width: width * 0.8)
+                    .blur(radius: 80)
+                    .offset(x: animate ? width * 0.1 : -width * 0.1,
+                            y: animate ? -height * 0.2 : height * 0.2)
+                
+                Circle()
+                    .fill(Color.purple.opacity(0.4))
+                    .frame(width: width * 0.6)
+                    .blur(radius: 80)
+                    .offset(x: animate ? -width * 0.2 : width * 0.2,
+                            y: animate ? height * 0.3 : -height * 0.1)
+                
+                Circle()
+                    .fill(Color.pink.opacity(0.4))
+                    .frame(width: width * 0.7)
+                    .blur(radius: 80)
+                    .offset(x: animate ? width * 0.3 : -width * 0.1,
+                            y: animate ? height * 0.1 : -height * 0.3)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) {
+                animate.toggle()
             }
         }
     }
