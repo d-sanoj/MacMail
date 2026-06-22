@@ -55,7 +55,7 @@ struct TopBarView: View {
                 .help("Sync all old messages for the selected account")
             }
 
-            Picker("Account", selection: Binding(
+            Picker("", selection: Binding(
                 get: { store.selectedAccountId ?? "" },
                 set: { id in
                     if id == "ADD_ACCOUNT" {
