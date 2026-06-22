@@ -233,24 +233,17 @@ struct ComposerView: View {
                 .buttonStyle(.plain)
                 .menuIndicator(.hidden)
                 .popover(isPresented: $showSchedulePicker) {
-                    VStack {
-                        DatePicker("Schedule send time", selection: $scheduleDate, in: Date()...)
-                            .datePickerStyle(.graphical)
-                        Button("Schedule Send") {
-                            let payload = generateEmailPayload()
-                            store.scheduleEmail(
-                                to: to, cc: cc, bcc: bcc, subject: subject,
-                                plainText: payload.plainText, htmlBody: payload.html,
-                                attachments: attachments.map(\.url), inlineImages: payload.inlineImages,
-                                date: scheduleDate
-                            )
-                            showSchedulePicker = false
-                            dismiss()
-                        }
-                        .buttonStyle(.borderedProminent)
+                    ScheduleSendView(customDate: $scheduleDate) { selectedDate in
+                        let payload = generateEmailPayload()
+                        store.scheduleEmail(
+                            to: to, cc: cc, bcc: bcc, subject: subject,
+                            plainText: payload.plainText, htmlBody: payload.html,
+                            attachments: attachments.map(\.url), inlineImages: payload.inlineImages,
+                            date: selectedDate
+                        )
+                        showSchedulePicker = false
+                        dismiss()
                     }
-                    .padding()
-                    .frame(width: 320)
                 }
             }
             .background(Color.accentColor)

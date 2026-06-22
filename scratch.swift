@@ -1,33 +1,28 @@
-import SwiftUI
+import Foundation
 
-struct TestView: View {
-    var body: some View {
-        HStack(spacing: 0) {
-            Button {
-            } label: {
-                Text("Send")
-                    .fontWeight(.semibold)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            
-            Divider().frame(height: 26).background(Color.white.opacity(0.3))
-            
-            Menu {
-                Button("Schedule Send") { }
-            } label: {
-                Image(systemName: "chevron.down")
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-        }
-        .background(Color.accentColor)
-        .foregroundColor(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-    }
+func nextMorning() -> Date {
+    let cal = Calendar.current
+    var components = cal.dateComponents([.year, .month, .day], from: Date().addingTimeInterval(86400))
+    components.hour = 8
+    return cal.date(from: components) ?? Date()
 }
+func nextAfternoon() -> Date {
+    let cal = Calendar.current
+    var components = cal.dateComponents([.year, .month, .day], from: Date().addingTimeInterval(86400))
+    components.hour = 13
+    return cal.date(from: components) ?? Date()
+}
+func nextMondayMorning() -> Date {
+    let cal = Calendar.current
+    var date = Date()
+    while cal.component(.weekday, from: date) != 2 { // 2 is Monday
+        date = date.addingTimeInterval(86400)
+    }
+    var components = cal.dateComponents([.year, .month, .day], from: date)
+    components.hour = 8
+    return cal.date(from: components) ?? Date()
+}
+
+print(nextMorning())
+print(nextAfternoon())
+print(nextMondayMorning())
