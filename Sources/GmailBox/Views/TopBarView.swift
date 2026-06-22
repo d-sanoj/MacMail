@@ -71,7 +71,7 @@ struct TopBarView: View {
                 Divider()
                 Text("Add Account...").tag("ADD_ACCOUNT")
             }
-            .frame(width: 220)
+            .frame(width: 320)
 
             Button {
                 store.showingSettings = true
